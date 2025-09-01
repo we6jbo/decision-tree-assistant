@@ -1,15 +1,27 @@
 package com.jeremiah.dt.mobile
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.work.*
+import androidx.preference.Preference
+import androidx.preference.PreferenceFragmentCompat
 
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+ // simple container for the fragment
+        val containerId = 1001
+        val frame = android.widget.FrameLayout(this).apply { id = containerId }
+        setContentView(frame)
+        if (savedInstanceState == null) {
+            supportFragmentManager.beginTransaction()
+                .replace(containerId, SettingsFragment())
+                .commit()
+        }
+        supportActionBar?.title = "Settings"
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
@@ -35,3 +47,13 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 }
+
+class SettingsFragment : PreferenceFragmentCompat() {
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.root_preferences, rootKey)
+            findPreference<Preference>("about")?.setOnPreferenceClickListener {
+                startActivity(Intent(requireContext(), AboutActivity::class.java))
+                true
+            }
+        }
+    }
