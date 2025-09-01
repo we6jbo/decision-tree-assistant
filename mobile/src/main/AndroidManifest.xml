@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.jeremiah.dt.mobile">
 
+    <!-- Permissions must be direct children of <manifest> -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:label="Decision Tree"
@@ -15,11 +18,10 @@
             android:name=".SettingsActivity"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
     </application>
 </manifest>
-<uses-permission android:name="android.permission.INTERNET"/>
