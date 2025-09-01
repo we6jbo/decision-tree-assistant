@@ -1,2 +1,13 @@
-android:usesCleartextTraffic="true"
-android:networkSecurityConfig="@xml/network_security_config"
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Internet so the app can talk to your Pi -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="DT Mobile"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <!-- Activity is optional; APK can be headless. Add one later if you want a UI. -->
+    </application>
+</manifest>
