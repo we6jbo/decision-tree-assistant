@@ -17,6 +17,8 @@ class SettingsActivity : AppCompatActivity() {
         val title = TextView(this).apply { text = "Decision Tree Assistant" }
         val goal = EditText(this).apply { hint = "Goal (e.g., Get VA IT role)" }
         val submit = Button(this).apply { text = "Submit" }
+        val intent = Intent(this, AboutActivity::class.java)
+        startActivity(intent)
 
         root.addView(title)
         root.addView(goal, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
