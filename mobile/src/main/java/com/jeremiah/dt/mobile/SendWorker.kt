@@ -1,63 +1,44 @@
 package com.jeremiah.dt.mobile
+
 import android.content.Context
-import androidx.work.*
-import kotlinx.coroutines.*
-import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.serialization.json.Json
-import java.util.concurrent.TimeUnit
+import androidx.work.Worker
+import androidx.work.WorkerParameters
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.time.Instant
 
-class SendWorker(appCtx: Context, params: WorkerParameters) : CoroutineWorker(appCtx, params) {
-  override suspend fun doWork(): Result = withContext(IO) {
-    val ctx = applicationContext
-    val prefs = encryptedPrefs(ctx)
-    val base = prefs.getString("baseUrl", "http://192.168.8.109:8088/")!!
-    val token = prefs.getString("token", "")!!
-    if (token.isBlank()) return@withContext Result.retry()
+class SendWorker(appContext: Context, params: WorkerParameters) : Worker(appContext, params) {
+    private val client = OkHttpClient()
 
-    val api = ApiFactory.create(base)
-    val dao = Queue.get(ctx).dao()
-    val json = Json
+    override fun doWork(): Result {
+        val goal = inputData.getString("goal") ?: "Unset"
+        val json = """
+            {
+              "id": "local-${System.currentTimeMillis()}",
+              "user": "jeremiah",
+              "created_at": "${Instant.now()}",
+              "goal": "${goal.replace("\"","'")}",
+              "constraints": [],
+              "facts": {},
+              "nodes": [{"id":"root","text":"Start","score":0.0,"children":[]}],
+              "edges": []
+            }
+        """.trimIndent()
 
-    var attempts = 0
-    while (attempts < 20) {
-      val ev = dao.peek() ?: return@withContext Result.success()
-      try {
-        when (ev.kind) {
-          "heartbeat" -> api.heartbeat(mapOf("device_id" to "galaxy-phone", "device_type" to "phone", "app_version" to "0.1.0"), token)
-          "ingest" -> {
-            val t = json.decodeFromString(DecisionTree.serializer(), ev.payloadJson)
-            api.ingest(t, token)
-          }
-          "improve" -> {
-            val body = json.decodeFromString<Map<String, @JvmSuppressWildcards Any>>(ev.payloadJson)
-            api.improve(body, token)
-          }
+        val body = json.toRequestBody("application/json; charset=utf-8".toMediaType())
+        val req = Request.Builder()
+            .url("http://192.168.8.109:8088/ingest")
+            .addHeader("Authorization", "Bearer 74869ecf04d620fd9cffc29643647fdb6544270a6c8f7bdb2016362b3a4d8f97")
+            .post(body)
+            .build()
+
+        return try {
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) Result.success() else Result.retry()
+            }
+        } catch (e: Exception) {
+            Result.retry()
         }
-        dao.delete(ev.id) // success
-      } catch (e: Exception) {
-        // network / auth / server error -> back off & retry later
-        attempts++
-        delay(1500L * attempts)
-      }
     }
-    Result.retry()
-  }
-
-  companion object {
-    fun schedule(ctx: Context) {
-      val constraints = Constraints.Builder()
-        .setRequiredNetworkType(NetworkType.CONNECTED)
-        .build()
-      val req = PeriodicWorkRequestBuilder<SendWorker>(15, TimeUnit.MINUTES) // min period
-        .setConstraints(constraints)
-        .addTag("queue-drain")
-        .build()
-      WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("queue-drain", ExistingPeriodicWorkPolicy.UPDATE, req)
-
-      // also kick an immediate run when we enqueue something:
-      val now = OneTimeWorkRequestBuilder<SendWorker>().setConstraints(constraints).build()
-      WorkManager.getInstance(ctx).enqueue(now)
-    }
-  }
 }
-
