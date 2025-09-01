@@ -19,10 +19,7 @@ android {
   buildTypes {
     release {
       isMinifyEnabled = false
-      proguardFiles(
-        getDefaultProguardFile("proguard-android-optimize.txt"),
-        "proguard-rules.pro"
-      )
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
   }
 
@@ -34,7 +31,6 @@ android {
 
   buildFeatures {
     viewBinding = true
-    // If you later use Compose, flip this to true and add compose deps
     compose = false
   }
 }
@@ -51,11 +47,11 @@ dependencies {
   implementation("androidx.room:room-ktx:2.6.1")
   kapt("androidx.room:room-compiler:2.6.1")
 
-  // Networking (Retrofit/OkHttp)
+  // Networking
   implementation("com.squareup.okhttp3:okhttp:4.12.0")
   implementation("com.squareup.retrofit2:retrofit:2.11.0")
   implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
 
-  // Optional: encrypted storage
+  // Encrypted storage (optional)
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
