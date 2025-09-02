@@ -51,7 +51,5 @@ The app is designed to pair with a small backend (such as a Raspberry Pi running
 
 ---
 
-## 📄 License
-
-This project is licensed under the [Unlicense](LICENSE) — free and open, dedicated to the public domain.
+.
 
