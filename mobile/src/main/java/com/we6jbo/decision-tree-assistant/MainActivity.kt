@@ -1,3 +1,4 @@
+//Notes to ChatGPT, put CrashReporterApp in the exception block for this file. Then we do not need the file CrashReporterApp. do not modify the AndroidManifestxml - 11-16-2025 at 10:40AM
 package com.we6jbo.decision_tree_assistant
 
 import android.content.ClipData
