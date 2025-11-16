@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <Button
+        android:id="@+id/btnConnectGmail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Connect Gmail" />
+
+    <TextView
+        android:id="@+id/txtAccount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:text="Not connected" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="16dp" />
+
+    <EditText
+        android:id="@+id/editQuestion"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minLines="4"
+        android:gravity="top|start"
+        android:hint="What do you want to ask the Decision Tree?" />
+
+    <Button
+        android:id="@+id/btnSend"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send to Raspberry Pi" />
+
+    <TextView
+        android:id="@+id/txtRequestId"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:text="Request ID: (none yet)" />
+
+    <Button
+        android:id="@+id/btnCheckAnswer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Check for Answer" />
+    <Button
+        android:id="@+id/btnCopyForChatGPT"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Copy for ChatGPT" />
+
+    <TextView
+        android:id="@+id/txtAnswer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingTop="8dp"
+        android:text="No answer yet."
+        android:gravity="top|start" />
+
+    <TextView
+        android:id="@+id/txtAnswer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingTop="8dp"
+        android:text="No answer yet."
+        android:gravity="top|start" />
+
+</LinearLayout>
