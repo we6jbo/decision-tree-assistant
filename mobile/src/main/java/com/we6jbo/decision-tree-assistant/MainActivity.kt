@@ -1,4 +1,7 @@
-//Notes to ChatGPT, put CrashReporterApp in the exception block for this file. Then we do not need the file CrashReporterApp. do not modify the AndroidManifestxml - 11-16-2025 at 10:40AM
+// Notes to ChatGPT, put CrashReporterApp in the exception block for this file.
+// Then we do not need the file CrashReporterApp.
+// do not modify the AndroidManifestxml - 11-16-2025 at 10:40AM
+
 package com.we6jbo.decision_tree_assistant
 
 import android.content.ClipData
@@ -6,6 +9,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -41,6 +46,18 @@ class MainActivity : AppCompatActivity() {
     private var lastCheckInfo: String? = null
     private var lastErrorMessage: String? = null
 
+    // Hang / task tracking for Gmail check
+    @Volatile
+    private var currentCheckThread: Thread? = null
+
+    @Volatile
+    private var isCheckCancelledByHang: Boolean = false
+
+    private val hangHandler = Handler(Looper.getMainLooper())
+
+    // 30 seconds timeout for "hang" detection (adjust if you want)
+    private val HANG_TIMEOUT_MS = 30_000L
+
     private val signInLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -51,6 +68,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             txtAccount.text = "Sign-in failed"
             lastErrorMessage = "Google Sign-In failed: ${task.exception?.message}"
+            // Non-fatal exception-style handling (optional; no actual crash here)
+            handleNonFatalException(
+                "Google Sign-In failed in signInLauncher callback. " +
+                        "Message: ${task.exception?.message}"
+            )
         }
     }
 
@@ -69,20 +91,58 @@ class MainActivity : AppCompatActivity() {
 
         setupGoogleSignIn()
 
+        // Load any previously saved Request ID so it persists across app restarts
+        currentRequestId = RequestIdStore.loadRequestId(this)
+        currentRequestId?.let {
+            txtRequestId.text = "Request ID: $it"
+        }
+
         btnConnectGmail.setOnClickListener {
-            signIn()
+            try {
+                signIn()
+            } catch (e: Exception) {
+                lastErrorMessage = "Exception during signIn(): ${e.message}"
+                handleNonFatalException(
+                    "Exception during signIn() in btnConnectGmail click handler.\n" +
+                            e.stackTraceToString()
+                )
+            }
         }
 
         btnSend.setOnClickListener {
-            sendDecisionTreeRequest()
+            try {
+                sendDecisionTreeRequest()
+            } catch (e: Exception) {
+                lastErrorMessage = "Exception in sendDecisionTreeRequest(): ${e.message}"
+                handleNonFatalException(
+                    "Exception while sending Decision Tree request.\n" +
+                            e.stackTraceToString()
+                )
+            }
         }
 
         btnCheckAnswer.setOnClickListener {
-            checkForAnswer()
+            try {
+                checkForAnswer()
+            } catch (e: Exception) {
+                lastErrorMessage = "Exception in checkForAnswer(): ${e.message}"
+                handleNonFatalException(
+                    "Exception starting checkForAnswer().\n" +
+                            e.stackTraceToString()
+                )
+            }
         }
 
         btnCopyForChatGPT.setOnClickListener {
-            copyDebugInfoToClipboard()
+            try {
+                copyDebugInfoToClipboard()
+            } catch (e: Exception) {
+                lastErrorMessage = "Exception in copyDebugInfoToClipboard(): ${e.message}"
+                handleNonFatalException(
+                    "Exception while copying debug info manually.\n" +
+                            e.stackTraceToString()
+                )
+            }
         }
     }
 
@@ -106,7 +166,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun signIn() {
         val signInIntent: Intent = googleSignInClient.signInIntent
-        signInLauncher.launch(signInIntent)
+        // You already have signInLauncher set up; you could use:
+        // signInLauncher.launch(signInIntent)
+        // but to keep behavior consistent with your current code:
+        startActivity(signInIntent)
     }
 
     private fun sendDecisionTreeRequest() {
@@ -121,14 +184,20 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // Generate a new time-based Request ID only when SEND is pressed
         val requestId = generateRequestId()
         currentRequestId = requestId
+        RequestIdStore.saveRequestId(this, requestId)
+
         txtRequestId.text = "Request ID: $requestId"
         txtAnswer.text = "No answer yet."
 
-        val subject = "dt-in"
+        // Include the RQ in the subject so Pi can echo it back
+        val subject = "dt-in RQ:$requestId"
 
         val body = """
+            Request-ID: $requestId
+
             Question:
             $questionText
 
@@ -144,6 +213,8 @@ class MainActivity : AppCompatActivity() {
         lastSendBody = body
         lastErrorMessage = null
 
+        // This is wrapped in try/catch by the click listener, and this method itself
+        // catches errors from startActivity and treats them as non-fatal.
         sendEmailViaIntent(
             to = to,
             subject = subject,
@@ -166,24 +237,30 @@ class MainActivity : AppCompatActivity() {
 
         txtAnswer.text = "Checking Gmail for Decision Tree reply..."
 
-        // Track debug info
+        // Reset hang flags and debug info
+        isCheckCancelledByHang = false
+
         lastCheckInfo = """
             Real Gmail check for Decision Tree reply.
             Gmail account: ${account.email}
             Search query:
               to:we6jbo+decisiontree@gmail.com
-              subject:dt-out
-            Note: requestId ($requestId) is not yet used in the search.
+              subject:"dt-out RQ:$requestId"
+            Using Request-ID: $requestId
         """.trimIndent()
 
-        Thread {
+        val worker = Thread {
             try {
                 val reader = GmailReader(this, account)
-                val body = reader.fetchLatestDecisionTreeReply()
+                val body = reader.fetchLatestDecisionTreeReply(requestId)
 
                 runOnUiThread {
+                    if (isCheckCancelledByHang) {
+                        // Task was cancelled by hang detector; do not update UI further.
+                        return@runOnUiThread
+                    }
                     if (body.isNullOrBlank()) {
-                        txtAnswer.text = "No dt-out reply found yet."
+                        txtAnswer.text = "No dt-out reply found yet for RQ:$requestId."
                     } else {
                         txtAnswer.text = body
                     }
@@ -191,13 +268,50 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 lastErrorMessage = "Error reading Gmail: ${e.message}"
                 runOnUiThread {
+                    if (isCheckCancelledByHang) {
+                        // Task was cancelled by hang detector; do not update UI further.
+                        return@runOnUiThread
+                    }
                     txtAnswer.text = "Error reading Gmail: ${e.message}"
+                    // Treat this as a non-fatal exception for crash reporting.
+                    handleNonFatalException(
+                        "Exception inside Gmail check thread while calling " +
+                                "GmailReader.fetchLatestDecisionTreeReply().\n" +
+                                e.stackTraceToString()
+                    )
                 }
             }
-        }.start()
+        }
+
+        currentCheckThread = worker
+        worker.start()
+
+        // Hang detection: if this thread is still alive after HANG_TIMEOUT_MS,
+        // treat it as "hung", stop doing that task, and report via AQeD.
+        hangHandler.postDelayed({
+            val t = currentCheckThread
+            if (t != null && t.isAlive && !isCheckCancelledByHang) {
+                isCheckCancelledByHang = true
+                try {
+                    t.interrupt()
+                } catch (_: Exception) {
+                    // Ignore; we just try to nudge it.
+                }
+
+                txtAnswer.text =
+                    "The Gmail check seems to be taking too long and was stopped."
+
+                handleHang(
+                    "The Gmail check for Decision Tree reply appeared to hang. " +
+                            "Thread was still alive after ${HANG_TIMEOUT_MS}ms.\n" +
+                            "LastCheckInfo:\n$lastCheckInfo\n\nLastErrorMessage:\n$lastErrorMessage"
+                )
+            }
+        }, HANG_TIMEOUT_MS)
     }
 
     private fun generateRequestId(): String {
+        // Time-based ID, only captured once when SEND is pressed
         val sdf = SimpleDateFormat("yyyy-MM-dd-HHmmss", Locale.US)
         return sdf.format(Date())
     }
@@ -219,19 +333,19 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, "No email app found", Toast.LENGTH_SHORT).show()
             lastErrorMessage = "No email app found: ${e.message}"
+            // Treat as a non-fatal exception for reporting.
+            handleNonFatalException(
+                "Exception while trying to launch email app via Intent.ACTION_SEND.\n" +
+                        e.stackTraceToString()
+            )
         }
     }
 
     /**
-     * Build a clipboard text blob for ChatGPT.
-     * Starts with your reference line, then all useful debug info.
+     * Build a reusable debug bundle with all the useful state.
      */
-    private fun copyDebugInfoToClipboard() {
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-
-        val debugText = buildString {
-            appendLine("ChatGPT, refer to my reference on my gmail decision tree project")
-            appendLine()
+    private fun buildDebugBundle(): String {
+        return buildString {
             appendLine("=== Decision Tree Android App Debug Info ===")
             appendLine("Timestamp: ${Date()}")
             appendLine("Signed-in Gmail account: ${signedInAccount?.email ?: "None"}")
@@ -254,10 +368,112 @@ class MainActivity : AppCompatActivity() {
             appendLine()
             appendLine("End of Decision Tree debug bundle.")
         }
+    }
+
+    /**
+     * Build a crash / hang report message for ChatGPT, with code and description.
+     */
+    private fun buildCrashMessage(code: String, description: String): String {
+        val header = "ChatGPT, could you please debug my code $code"
+        return buildString {
+            appendLine(header)
+            appendLine()
+            appendLine("Description of what happened:")
+            appendLine(description)
+            appendLine()
+            appendLine(buildDebugBundle())
+        }
+    }
+
+    /**
+     * Core helper that:
+     * 1) Copies the crash / hang message to the clipboard.
+     * 2) Opens a SEND chooser so you can select ChatGPT (or any app) and paste.
+     */
+    private fun copyCrashInfoAndOpenShare(code: String, description: String) {
+        val text = buildCrashMessage(code, description)
+
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("DecisionTreeCrash", text)
+        cm.setPrimaryClip(clip)
+
+        Toast.makeText(
+            this,
+            "Crash / hang info copied to clipboard for ChatGPT",
+            Toast.LENGTH_SHORT
+        ).show()
+
+        // Open the "send to" / share sheet so you can choose ChatGPT on your phone.
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+
+        try {
+            startActivity(Intent.createChooser(shareIntent, "Send to ChatGPT or another app"))
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Unable to open share sheet: ${e.message}",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    /**
+     * Hang handler: use code AQeD.
+     */
+    private fun handleHang(description: String) {
+        copyCrashInfoAndOpenShare("AQeD", description)
+    }
+
+    /**
+     * Non-fatal exception handler: use code WEC2.
+     */
+    private fun handleNonFatalException(description: String) {
+        copyCrashInfoAndOpenShare("WEC2", description)
+    }
+
+    /**
+     * Manual debug bundle copier (your existing button).
+     */
+    private fun copyDebugInfoToClipboard() {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+        val debugText = buildString {
+            appendLine("ChatGPT, refer to my reference on my gmail decision tree project")
+            appendLine()
+            appendLine(buildDebugBundle())
+        }
 
         val clip = ClipData.newPlainText("DecisionTreeDebug", debugText)
         cm.setPrimaryClip(clip)
 
         Toast.makeText(this, "Debug info copied for ChatGPT", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Simple persistent store for the last Request ID (RQ).
+ * This keeps the time-based RQ as a "variable" that survives app restarts,
+ * and is only changed when the user presses SEND.
+ */
+object RequestIdStore {
+    private const val PREF_NAME = "decision_tree_prefs"
+    private const val KEY_REQUEST_ID = "last_request_id"
+
+    fun saveRequestId(context: Context, requestId: String) {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_REQUEST_ID, requestId).apply()
+    }
+
+    fun loadRequestId(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_REQUEST_ID, null)
+    }
+
+    fun clearRequestId(context: Context) {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        prefs.edit().remove(KEY_REQUEST_ID).apply()
     }
 }
