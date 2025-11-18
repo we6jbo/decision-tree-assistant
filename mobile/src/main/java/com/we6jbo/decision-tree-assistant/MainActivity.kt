@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCheckAnswer: Button
     private lateinit var btnCopyForChatGPT: Button
     private lateinit var txtAnswer: TextView
+    private lateinit var txtStatusInfo: TextView
 
     private var currentRequestId: String? = null
 
@@ -88,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         btnCheckAnswer = findViewById(R.id.btnCheckAnswer)
         btnCopyForChatGPT = findViewById(R.id.btnCopyForChatGPT)
         txtAnswer = findViewById(R.id.txtAnswer)
+        txtStatusInfo = findViewById(R.id.txtStatusInfo)
 
         setupGoogleSignIn()
 
@@ -166,9 +168,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun signIn() {
         val signInIntent: Intent = googleSignInClient.signInIntent
-        // You already have signInLauncher set up; you could use:
-        // signInLauncher.launch(signInIntent)
-        // but to keep behavior consistent with your current code:
+        // You can swap to signInLauncher.launch(signInIntent) if you prefer.
         startActivity(signInIntent)
     }
 
@@ -191,6 +191,7 @@ class MainActivity : AppCompatActivity() {
 
         txtRequestId.text = "Request ID: $requestId"
         txtAnswer.text = "No answer yet."
+        txtStatusInfo.text = "No statusinfo message yet."
 
         // Include the RQ in the subject so Pi can echo it back
         val subject = "dt-in RQ:$requestId"
@@ -236,6 +237,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         txtAnswer.text = "Checking Gmail for Decision Tree reply..."
+        txtStatusInfo.text = "Checking Gmail for Status Info..."
 
         // Reset hang flags and debug info
         isCheckCancelledByHang = false
@@ -247,22 +249,32 @@ class MainActivity : AppCompatActivity() {
               to:we6jbo+decisiontree@gmail.com
               subject:"dt-out RQ:$requestId"
             Using Request-ID: $requestId
+
+            Also checking latest statusinfo message.
         """.trimIndent()
 
         val worker = Thread {
             try {
                 val reader = GmailReader(this, account)
                 val body = reader.fetchLatestDecisionTreeReply(requestId)
+                val statusBody = reader.fetchLatestStatusInfo()
 
                 runOnUiThread {
                     if (isCheckCancelledByHang) {
                         // Task was cancelled by hang detector; do not update UI further.
                         return@runOnUiThread
                     }
+
                     if (body.isNullOrBlank()) {
                         txtAnswer.text = "No dt-out reply found yet for RQ:$requestId."
                     } else {
                         txtAnswer.text = body
+                    }
+
+                    if (statusBody.isNullOrBlank()) {
+                        txtStatusInfo.text = "No statusinfo message found."
+                    } else {
+                        txtStatusInfo.text = statusBody
                     }
                 }
             } catch (e: Exception) {
@@ -276,7 +288,7 @@ class MainActivity : AppCompatActivity() {
                     // Treat this as a non-fatal exception for crash reporting.
                     handleNonFatalException(
                         "Exception inside Gmail check thread while calling " +
-                                "GmailReader.fetchLatestDecisionTreeReply().\n" +
+                                "GmailReader.fetchLatestDecisionTreeReply() / fetchLatestStatusInfo().\n" +
                                 e.stackTraceToString()
                     )
                 }
@@ -362,6 +374,9 @@ class MainActivity : AppCompatActivity() {
             appendLine()
             appendLine("--- Last Visible Answer Text in App ---")
             appendLine(txtAnswer.text?.toString() ?: "N/A")
+            appendLine()
+            appendLine("--- Last Status Info Text in App ---")
+            appendLine(txtStatusInfo.text?.toString() ?: "N/A")
             appendLine()
             appendLine("--- Last Error (if any) ---")
             appendLine(lastErrorMessage ?: "None recorded.")

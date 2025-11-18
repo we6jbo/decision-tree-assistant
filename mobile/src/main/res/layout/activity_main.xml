@@ -58,19 +58,19 @@
     <TextView
         android:id="@+id/txtAnswer"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_height="240dp"
         android:layout_weight="1"
+        android:gravity="top|start"
         android:paddingTop="8dp"
-        android:text="No answer yet."
-        android:gravity="top|start" />
+        android:text="No answer yet." />
 
     <TextView
-        android:id="@+id/txtAnswer"
+        android:id="@+id/txtStatusInfo"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:gravity="top|start"
         android:paddingTop="8dp"
-        android:text="No answer yet."
-        android:gravity="top|start" />
+        android:text="CHECK FOR ANSWER." />
 
 </LinearLayout>

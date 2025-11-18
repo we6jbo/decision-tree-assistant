@@ -54,7 +54,6 @@ class GmailReader(private val context: Context, private val account: GoogleSignI
     fun fetchLatestDecisionTreeReply(requestId: String): String? {
         val executor = Executors.newSingleThreadExecutor()
         val task = Callable<String?> {
-            // Search for a reply for THIS specific requestId
             val query = """to:we6jbo+decisiontree@gmail.com subject:"dt-out RQ:$requestId""""
 
             val list = gmailService.users().messages().list("me")
@@ -74,18 +73,16 @@ class GmailReader(private val context: Context, private val account: GoogleSignI
         }
 
         return try {
-            // If this takes longer than 15 seconds, treat it as a "hang"
             executor.submit(task).get(15, TimeUnit.SECONDS)
         } catch (e: TimeoutException) {
-            // HANG: AQeD
-            val description = "fetchLatestDecisionTreeReply timed out after 15 seconds. RQ:$requestId"
+            val description =
+                "fetchLatestDecisionTreeReply timed out after 15 seconds. RQ:$requestId"
             copyToClipboardAndOpenShare(
                 code = "AQeD",
                 description = description
             )
             null
         } catch (e: Exception) {
-            // EXCEPTION: WEC2
             val description = buildString {
                 append("fetchLatestDecisionTreeReply hit an exception: ")
                 append(e.javaClass.simpleName)
@@ -96,6 +93,66 @@ class GmailReader(private val context: Context, private val account: GoogleSignI
                 append(" (RQ:")
                 append(requestId)
                 append(")")
+            }
+            copyToClipboardAndOpenShare(
+                code = "WEC2",
+                description = description
+            )
+            null
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    /**
+     * Find the latest Raspberry Pi status message:
+     *
+     *   Subject starts with "statusinfo"
+     *
+     * (e.g. "statusinfo 2025-11-17-20 ...")
+     *
+     * and return its plain-text body.
+     *
+     * Same hang / exception behavior as the DecisionTree reply method.
+     */
+    fun fetchLatestStatusInfo(): String? {
+        val executor = Executors.newSingleThreadExecutor()
+        val task = Callable<String?> {
+            val query = """to:we6jbo+decisiontree@gmail.com subject:statusinfo"""
+
+            val list = gmailService.users().messages().list("me")
+                .setQ(query)
+                .setMaxResults(1L)
+                .execute()
+
+            val messages = list.messages ?: return@Callable null
+            if (messages.isEmpty()) return@Callable null
+
+            val msgId = messages[0].id
+            val fullMessage: Message = gmailService.users().messages().get("me", msgId)
+                .setFormat("full")
+                .execute()
+
+            extractPlainTextBody(fullMessage)
+        }
+
+        return try {
+            executor.submit(task).get(15, TimeUnit.SECONDS)
+        } catch (e: TimeoutException) {
+            val description = "fetchLatestStatusInfo timed out after 15 seconds."
+            copyToClipboardAndOpenShare(
+                code = "AQeD",
+                description = description
+            )
+            null
+        } catch (e: Exception) {
+            val description = buildString {
+                append("fetchLatestStatusInfo hit an exception: ")
+                append(e.javaClass.simpleName)
+                e.message?.let {
+                    append(" - ")
+                    append(it)
+                }
             }
             copyToClipboardAndOpenShare(
                 code = "WEC2",
